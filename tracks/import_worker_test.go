@@ -64,6 +64,7 @@ func TestImportWorker(t *testing.T) {
 		OwnerID:  owner,
 		Filename: "file.gpx",
 		Data:     sampleGPX(),
+		Hash:     []byte("sample_hash"),
 	})
 	require.NoError(t, err)
 

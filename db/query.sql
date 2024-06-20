@@ -13,16 +13,34 @@ SELECT owner_id
 FROM tracks
 WHERE id = $1;
 
+-- name: GetTrackImportID :one
+SELECT import_id
+FROM tracks
+WHERE id = $1;
+
 -- name: ListTracksOrderByTime :many
 SELECT *
 FROM tracks
 WHERE owner_id = $1
 ORDER BY time DESC;
 
+-- name: HasImportedTrack :one
+SELECT EXISTS(
+    SELECT 1
+    FROM tracks t
+    JOIN track_imports ti ON t.import_id = ti.id
+    WHERE t.owner_id = $1 AND
+      ti.owner_id = $2 AND
+      ti.hash = $3
+);
+
+-- name: DeleteTrackImport :exec
+DELETE FROM track_imports
+WHERE id = $1;
 
 -- name: InsertTrackImport :one
-INSERT INTO track_imports (owner_id, filename, data)
-VALUES ($1, $2, $3)
+INSERT INTO track_imports (owner_id, filename, data, hash)
+VALUES ($1, $2, $3, $4)
 RETURNING id;
 
 -- name: MarkTrackImportCompleted :exec
@@ -42,7 +60,7 @@ FROM track_imports
 WHERE id = $1;
 
 -- name: ListMyPendingOrRecentImports :many
-SELECT id,
+SELECT hash,
        owner_id,
        inserted_at,
        completed_at,
@@ -58,7 +76,7 @@ WHERE owner_id = $1
 ORDER BY inserted_at DESC;
 
 -- name: GetTrackImportStatus :one
-SELECT id,
+SELECT hash,
        owner_id,
        inserted_at,
        completed_at,

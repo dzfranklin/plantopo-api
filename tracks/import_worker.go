@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+// TODO: This isn't properly responding to soft stops
+
 type ToGeoJSON interface {
 	Convert(ctx context.Context, filename string, data []byte) (json.RawMessage, error)
 }

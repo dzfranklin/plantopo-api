@@ -23,6 +23,16 @@ func (q *Queries) DeleteTrack(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteTrackImport = `-- name: DeleteTrackImport :exec
+DELETE FROM track_imports
+WHERE id = $1
+`
+
+func (q *Queries) DeleteTrackImport(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteTrackImport, id)
+	return err
+}
+
 const getTrack = `-- name: GetTrack :one
 SELECT id, owner_id, name, upload_time, time, geojson, import_id
 FROM tracks
@@ -45,7 +55,7 @@ func (q *Queries) GetTrack(ctx context.Context, id int64) (Track, error) {
 }
 
 const getTrackImport = `-- name: GetTrackImport :one
-SELECT id, owner_id, inserted_at, completed_at, failed_at, error, filename, data
+SELECT id, owner_id, hash, inserted_at, completed_at, failed_at, error, filename, data
 FROM track_imports
 WHERE id = $1
 `
@@ -56,6 +66,7 @@ func (q *Queries) GetTrackImport(ctx context.Context, id int64) (TrackImport, er
 	err := row.Scan(
 		&i.ID,
 		&i.OwnerID,
+		&i.Hash,
 		&i.InsertedAt,
 		&i.CompletedAt,
 		&i.FailedAt,
@@ -66,8 +77,21 @@ func (q *Queries) GetTrackImport(ctx context.Context, id int64) (TrackImport, er
 	return i, err
 }
 
+const getTrackImportID = `-- name: GetTrackImportID :one
+SELECT import_id
+FROM tracks
+WHERE id = $1
+`
+
+func (q *Queries) GetTrackImportID(ctx context.Context, id int64) (*int64, error) {
+	row := q.db.QueryRow(ctx, getTrackImportID, id)
+	var import_id *int64
+	err := row.Scan(&import_id)
+	return import_id, err
+}
+
 const getTrackImportStatus = `-- name: GetTrackImportStatus :one
-SELECT id,
+SELECT hash,
        owner_id,
        inserted_at,
        completed_at,
@@ -80,7 +104,7 @@ WHERE id = $1
 `
 
 type GetTrackImportStatusRow struct {
-	ID          int64            `json:"id"`
+	Hash        []byte           `json:"hash"`
 	OwnerID     string           `json:"ownerID"`
 	InsertedAt  pgtype.Timestamp `json:"insertedAt"`
 	CompletedAt pgtype.Timestamp `json:"completedAt"`
@@ -94,7 +118,7 @@ func (q *Queries) GetTrackImportStatus(ctx context.Context, id int64) (GetTrackI
 	row := q.db.QueryRow(ctx, getTrackImportStatus, id)
 	var i GetTrackImportStatusRow
 	err := row.Scan(
-		&i.ID,
+		&i.Hash,
 		&i.OwnerID,
 		&i.InsertedAt,
 		&i.CompletedAt,
@@ -117,6 +141,30 @@ func (q *Queries) GetTrackOwner(ctx context.Context, id int64) (*string, error) 
 	var owner_id *string
 	err := row.Scan(&owner_id)
 	return owner_id, err
+}
+
+const hasImportedTrack = `-- name: HasImportedTrack :one
+SELECT EXISTS(
+    SELECT 1
+    FROM tracks t
+    JOIN track_imports ti ON t.import_id = ti.id
+    WHERE t.owner_id = $1 AND
+      ti.owner_id = $2 AND
+      ti.hash = $3
+)
+`
+
+type HasImportedTrackParams struct {
+	OwnerID   *string `json:"ownerID"`
+	OwnerID_2 string  `json:"ownerID2"`
+	Hash      []byte  `json:"hash"`
+}
+
+func (q *Queries) HasImportedTrack(ctx context.Context, arg HasImportedTrackParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasImportedTrack, arg.OwnerID, arg.OwnerID_2, arg.Hash)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const insertImportedTrack = `-- name: InsertImportedTrack :one
@@ -150,8 +198,8 @@ func (q *Queries) InsertImportedTrack(ctx context.Context, arg InsertImportedTra
 }
 
 const insertTrackImport = `-- name: InsertTrackImport :one
-INSERT INTO track_imports (owner_id, filename, data)
-VALUES ($1, $2, $3)
+INSERT INTO track_imports (owner_id, filename, data, hash)
+VALUES ($1, $2, $3, $4)
 RETURNING id
 `
 
@@ -159,17 +207,23 @@ type InsertTrackImportParams struct {
 	OwnerID  string `json:"ownerID"`
 	Filename string `json:"filename"`
 	Data     []byte `json:"data"`
+	Hash     []byte `json:"hash"`
 }
 
 func (q *Queries) InsertTrackImport(ctx context.Context, arg InsertTrackImportParams) (int64, error) {
-	row := q.db.QueryRow(ctx, insertTrackImport, arg.OwnerID, arg.Filename, arg.Data)
+	row := q.db.QueryRow(ctx, insertTrackImport,
+		arg.OwnerID,
+		arg.Filename,
+		arg.Data,
+		arg.Hash,
+	)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
 }
 
 const listMyPendingOrRecentImports = `-- name: ListMyPendingOrRecentImports :many
-SELECT id,
+SELECT hash,
        owner_id,
        inserted_at,
        completed_at,
@@ -186,7 +240,7 @@ ORDER BY inserted_at DESC
 `
 
 type ListMyPendingOrRecentImportsRow struct {
-	ID          int64            `json:"id"`
+	Hash        []byte           `json:"hash"`
 	OwnerID     string           `json:"ownerID"`
 	InsertedAt  pgtype.Timestamp `json:"insertedAt"`
 	CompletedAt pgtype.Timestamp `json:"completedAt"`
@@ -206,7 +260,7 @@ func (q *Queries) ListMyPendingOrRecentImports(ctx context.Context, ownerID stri
 	for rows.Next() {
 		var i ListMyPendingOrRecentImportsRow
 		if err := rows.Scan(
-			&i.ID,
+			&i.Hash,
 			&i.OwnerID,
 			&i.InsertedAt,
 			&i.CompletedAt,

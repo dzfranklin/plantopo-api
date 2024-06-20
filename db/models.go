@@ -22,6 +22,7 @@ type Track struct {
 type TrackImport struct {
 	ID          int64            `json:"id"`
 	OwnerID     string           `json:"ownerID"`
+	Hash        []byte           `json:"hash"`
 	InsertedAt  pgtype.Timestamp `json:"insertedAt"`
 	CompletedAt pgtype.Timestamp `json:"completedAt"`
 	FailedAt    pgtype.Timestamp `json:"failedAt"`

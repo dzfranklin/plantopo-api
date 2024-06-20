@@ -2,6 +2,7 @@ package tracks
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"github.com/dzfranklin/plantopo-api/db"
@@ -41,7 +42,6 @@ type Track struct {
 	UploadTime time.Time       `json:"uploadTime"`
 	Time       *time.Time      `json:"time,omitempty"`
 	Geojson    geojson.Feature `json:"geojson"`
-	ImportID   string          `json:"importID,omitempty"`
 }
 
 type Import struct {
@@ -71,11 +71,34 @@ func (r *Repo) Get(ctx context.Context, id string) (Track, error) {
 }
 
 func (r *Repo) Delete(ctx context.Context, id string) error {
-	tid, err := ids.Unmarshal(trackIdPrefix, id)
+	tID, err := ids.Unmarshal(trackIdPrefix, id)
 	if err != nil {
 		return err
 	}
-	return r.q.DeleteTrack(ctx, tid)
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	q := r.q.WithTx(tx)
+
+	tiID, err := q.GetTrackImportID(ctx, tID)
+	if err != nil {
+		return err
+	}
+
+	if err := q.DeleteTrack(ctx, tID); err != nil {
+		return err
+	}
+
+	if tiID != nil {
+		if err := q.DeleteTrackImport(ctx, *tiID); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (r *Repo) IsOwner(ctx context.Context, userId string, trackId string) (bool, error) {
@@ -120,13 +143,12 @@ func (r *Repo) Import(ctx context.Context, ownerID string, filename string, data
 	if err != nil {
 		return "", err
 	}
-	defer func(tx pgx.Tx, ctx context.Context) {
-		_ = tx.Rollback(ctx)
-	}(tx, ctx)
+	defer tx.Rollback(ctx)
 	q := r.q.WithTx(tx)
 
 	id, err := q.InsertTrackImport(ctx, db.InsertTrackImportParams{
 		OwnerID:  ownerID,
+		Hash:     hashImport(ownerID, filename, data),
 		Filename: filename,
 		Data:     data,
 	})
@@ -159,7 +181,7 @@ func (r *Repo) ImportStatus(ctx context.Context, id string) (Import, error) {
 	}
 
 	return Import{
-		ID:          ids.Marshal(importIdPrefix, data.ID),
+		ID:          ids.MarshalHash(importIdPrefix, data.Hash),
 		OwnerID:     data.OwnerID,
 		StartedAt:   data.InsertedAt.Time,
 		CompletedAt: pgTimestampToNullable(data.CompletedAt),
@@ -178,7 +200,7 @@ func (r *Repo) ListMyPendingOrRecentImports(ctx context.Context, userID string) 
 	out := make([]Import, 0)
 	for _, i := range imports {
 		out = append(out, Import{
-			ID:          ids.Marshal(importIdPrefix, i.ID),
+			ID:          ids.MarshalHash(importIdPrefix, i.Hash),
 			OwnerID:     i.OwnerID,
 			StartedAt:   i.InsertedAt.Time,
 			CompletedAt: pgTimestampToNullable(i.CompletedAt),
@@ -199,7 +221,6 @@ func toTrack(data db.Track) Track {
 		UploadTime: data.UploadTime.Time,
 		Time:       pgTimestampToNullable(data.Time),
 		Geojson:    data.Geojson,
-		ImportID:   ids.MarshalNullable(importIdPrefix, data.ImportID),
 	}
 }
 
@@ -215,4 +236,14 @@ func stringFromNullable(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+func hashImport(ownerID string, filename string, data []byte) []byte {
+	h := sha256.New()
+	h.Write([]byte(ownerID))
+	h.Write([]byte{0})
+	h.Write([]byte(filename))
+	h.Write([]byte{0})
+	h.Write(data)
+	return h.Sum(nil)
 }
