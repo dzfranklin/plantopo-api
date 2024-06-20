@@ -42,6 +42,17 @@ func getTrack(repo TracksRepo) gin.HandlerFunc {
 		}
 
 		trackId := c.Param("id")
+
+		isOwner, err := repo.IsOwner(c.Request.Context(), userId, trackId)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Internal server error"})
+			return
+		}
+		if !isOwner {
+			c.JSON(403, gin.H{"error": "Forbidden"})
+			return
+		}
+
 		track, err := repo.Get(c.Request.Context(), trackId)
 		if err != nil {
 			if errors.Is(err, tracks.ErrTrackNotFound) {
@@ -49,21 +60,6 @@ func getTrack(repo TracksRepo) gin.HandlerFunc {
 				return
 			}
 			c.JSON(500, gin.H{"error": "Internal server error"})
-			return
-		}
-
-		isOwner, err := repo.IsOwner(c.Request.Context(), userId, trackId)
-		if err != nil {
-			if errors.Is(err, tracks.ErrTrackNotFound) {
-				c.JSON(404, gin.H{"error": "Track not found"})
-				return
-			}
-			c.JSON(500, gin.H{"error": "Internal server error"})
-			return
-		}
-
-		if !isOwner {
-			c.JSON(403, gin.H{"error": "Forbidden"})
 			return
 		}
 

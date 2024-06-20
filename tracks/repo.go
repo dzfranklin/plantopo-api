@@ -110,7 +110,7 @@ func (r *Repo) IsOwner(ctx context.Context, userId string, trackId string) (bool
 	owner, err := r.q.GetTrackOwner(ctx, tid)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return false, ErrTrackNotFound
+			return false, nil
 		}
 		return false, err
 	}
