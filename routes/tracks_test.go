@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/dzfranklin/plantopo-api/db"
+	"github.com/dzfranklin/plantopo-api/tracks"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/assert/v2"
 	"github.com/paulmach/orb"
@@ -41,9 +41,9 @@ func (a *AuthenticatorMock) Verify(_ string) (string, error) {
 
 type TracksRepoMock struct{}
 
-func (r *TracksRepoMock) ListOrderByTime(_ context.Context, userId string) ([]db.Track, error) {
-	return []db.Track{
-		{ID: 42, OwnerID: &userId},
+func (r *TracksRepoMock) ListMyTracksOrderByTime(_ context.Context, _ string) ([]tracks.Track, error) {
+	return []tracks.Track{
+		{ID: "track_42"},
 	}, nil
 }
 
@@ -51,9 +51,27 @@ func (r *TracksRepoMock) Import(_ context.Context, _ string, _ string, _ []byte)
 	return "trackimport_42", nil
 }
 
+func (r *TracksRepoMock) Get(_ context.Context, id string) (tracks.Track, error) {
+	return tracks.Track{
+		ID: id,
+	}, nil
+}
+
+func (r *TracksRepoMock) IsOwner(_ context.Context, _ string, _ string) (bool, error) {
+	return true, nil
+}
+
+func (r *TracksRepoMock) Delete(_ context.Context, _ string) error {
+	return nil
+}
+
+func (r *TracksRepoMock) ListMyPendingOrRecentImports(_ context.Context, _ string) ([]tracks.Import, error) {
+	return []tracks.Import{}, nil
+}
+
 type ElevationMock struct{}
 
-func (e *ElevationMock) QueryElevations(ctx context.Context, points orb.LineString) ([]int32, error) {
+func (e *ElevationMock) QueryElevations(_ context.Context, points orb.LineString) ([]int32, error) {
 	out := make([]int32, len(points))
 	for i := range out {
 		out[i] = int32(42)
@@ -96,7 +114,7 @@ func TestListTracks(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 
 	var resp struct {
-		Data []db.Track `json:"data"`
+		Data []tracks.Track `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, 1, len(resp.Data))
@@ -138,7 +156,7 @@ func TestImportTrack(t *testing.T) {
 
 	var resp struct {
 		Data struct {
-			Imports []string
+			Imports []successfulTrackImportRequest `json:"imports"`
 		}
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))

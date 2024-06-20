@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/paulmach/orb"
@@ -11,6 +12,8 @@ import (
 	"log/slog"
 	"net/http"
 )
+
+// Consider using https://elevationapi.com for areas we don't support
 
 type ElevationService struct {
 	http     *http.Client
@@ -32,10 +35,12 @@ func (s *ElevationService) QueryElevations(ctx context.Context, points orb.LineS
 	err := backoff.Retry(func() error {
 		var err error
 		elevations, err = doElevationLookup(ctx, s.http, s.endpoint+"/elevation", points)
-		if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return backoff.Permanent(err)
+		} else {
 			slog.Warn("Error querying elevations", "error", err)
+			return err
 		}
-		return err
 	}, backoff.NewExponentialBackOff())
 	return elevations, err
 }

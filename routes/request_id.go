@@ -17,7 +17,7 @@ func assignRequestID() gin.HandlerFunc {
 	}
 }
 
-func getRequestID(c *gin.Context) string {
+func RequestID(c *gin.Context) string {
 	requestID, ok := c.Get(requestIDKey)
 	if !ok {
 		panic("requestID not set in context")

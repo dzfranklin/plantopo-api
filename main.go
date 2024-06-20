@@ -27,6 +27,8 @@ func main() {
 		slog.Info("dotenv", "error", err)
 	}
 
+	appEnv := getEnvOr("APP_ENV", "production")
+
 	host := getEnvOr("HOST", "0.0.0.0")
 	port := getEnvOr("PORT", "8000")
 	addr := host + ":" + port
@@ -37,11 +39,15 @@ func main() {
 		log.Fatal(err)
 	}
 
+	var authenticator routes.Authenticator
 	workosClientID := mustGetEnv("WORKOS_CLIENT_ID")
 	workosAPIKey := mustGetEnv("WORKOS_API_KEY")
-	workosAuthn, err := authn.NewWorkOS(workosClientID, workosAPIKey)
+	authenticator, err = authn.NewWorkOS(workosClientID, workosAPIKey)
 	if err != nil {
 		log.Fatal(err)
+	}
+	if appEnv == "development" {
+		authenticator = &authn.DevAuthenticator{WorkOS: authenticator.(*authn.WorkOS)}
 	}
 
 	toGeoJSONService := tracks.NewToGeoJSONService(mustGetEnv("TO_GEOJSON_SERVICE"))
@@ -73,7 +79,7 @@ func main() {
 	tracksRepo := tracks.NewRepo(pool, riverClient)
 
 	router := routes.Router(
-		workosAuthn,
+		authenticator,
 		tracksRepo,
 		elevationService,
 	)

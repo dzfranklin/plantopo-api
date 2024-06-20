@@ -14,7 +14,7 @@ func Router(
 	r.Use(assignRequestID())
 	r.Use(loggerMiddleware())
 	r.Use(gin.Recovery())
-	r.Use(authMiddleware(authenticator))
+	r.Use(Auth(authenticator))
 	base := r.Group("/api/v1")
 	registerTracksRoutes(base, tracks)
 	registerElevationRoute(base, elevation)

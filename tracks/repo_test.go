@@ -39,7 +39,7 @@ func newSubjectWithDriver(t *testing.T) (*riverpgxv5.Driver, *Repo) {
 
 func TestListOrderByTimeEmpty(t *testing.T) {
 	r := newSubject(t)
-	tracks, err := r.ListOrderByTime(context.Background(), "user_1")
+	tracks, err := r.ListMyTracksOrderByTime(context.Background(), "user_1")
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(tracks))
 }

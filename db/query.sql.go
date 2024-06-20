@@ -12,6 +12,38 @@ import (
 	"github.com/paulmach/orb/geojson"
 )
 
+const deleteTrack = `-- name: DeleteTrack :exec
+DELETE
+FROM tracks
+WHERE id = $1
+`
+
+func (q *Queries) DeleteTrack(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteTrack, id)
+	return err
+}
+
+const getTrack = `-- name: GetTrack :one
+SELECT id, owner_id, name, upload_time, time, geojson, import_id
+FROM tracks
+WHERE id = $1
+`
+
+func (q *Queries) GetTrack(ctx context.Context, id int64) (Track, error) {
+	row := q.db.QueryRow(ctx, getTrack, id)
+	var i Track
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Name,
+		&i.UploadTime,
+		&i.Time,
+		&i.Geojson,
+		&i.ImportID,
+	)
+	return i, err
+}
+
 const getTrackImport = `-- name: GetTrackImport :one
 SELECT id, owner_id, inserted_at, completed_at, failed_at, error, filename, data
 FROM track_imports
@@ -35,35 +67,62 @@ func (q *Queries) GetTrackImport(ctx context.Context, id int64) (TrackImport, er
 }
 
 const getTrackImportStatus = `-- name: GetTrackImportStatus :one
-SELECT inserted_at, completed_at, failed_at, error
+SELECT id,
+       owner_id,
+       inserted_at,
+       completed_at,
+       failed_at,
+       error,
+       filename,
+       length(data) as byte_size
 FROM track_imports
 WHERE id = $1
 `
 
 type GetTrackImportStatusRow struct {
+	ID          int64            `json:"id"`
+	OwnerID     string           `json:"ownerID"`
 	InsertedAt  pgtype.Timestamp `json:"insertedAt"`
 	CompletedAt pgtype.Timestamp `json:"completedAt"`
 	FailedAt    pgtype.Timestamp `json:"failedAt"`
 	Error       *string          `json:"error"`
+	Filename    string           `json:"filename"`
+	ByteSize    int32            `json:"byteSize"`
 }
 
 func (q *Queries) GetTrackImportStatus(ctx context.Context, id int64) (GetTrackImportStatusRow, error) {
 	row := q.db.QueryRow(ctx, getTrackImportStatus, id)
 	var i GetTrackImportStatusRow
 	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
 		&i.InsertedAt,
 		&i.CompletedAt,
 		&i.FailedAt,
 		&i.Error,
+		&i.Filename,
+		&i.ByteSize,
 	)
 	return i, err
+}
+
+const getTrackOwner = `-- name: GetTrackOwner :one
+SELECT owner_id
+FROM tracks
+WHERE id = $1
+`
+
+func (q *Queries) GetTrackOwner(ctx context.Context, id int64) (*string, error) {
+	row := q.db.QueryRow(ctx, getTrackOwner, id)
+	var owner_id *string
+	err := row.Scan(&owner_id)
+	return owner_id, err
 }
 
 const insertImportedTrack = `-- name: InsertImportedTrack :one
 INSERT INTO tracks
     (owner_id, name, upload_time, time, geojson, import_id)
-VALUES
-    ($1, $2, $3, $4, $5, $6)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id
 `
 
@@ -109,11 +168,68 @@ func (q *Queries) InsertTrackImport(ctx context.Context, arg InsertTrackImportPa
 	return id, err
 }
 
+const listMyPendingOrRecentImports = `-- name: ListMyPendingOrRecentImports :many
+SELECT id,
+       owner_id,
+       inserted_at,
+       completed_at,
+       failed_at,
+       error,
+       filename,
+       length(data) as byte_size
+FROM track_imports
+WHERE owner_id = $1
+  AND (completed_at IS NULL OR
+       completed_at > NOW() - INTERVAL '1 DAY' OR
+       failed_at > NOW() - INTERVAL '1 DAY')
+ORDER BY inserted_at DESC
+`
+
+type ListMyPendingOrRecentImportsRow struct {
+	ID          int64            `json:"id"`
+	OwnerID     string           `json:"ownerID"`
+	InsertedAt  pgtype.Timestamp `json:"insertedAt"`
+	CompletedAt pgtype.Timestamp `json:"completedAt"`
+	FailedAt    pgtype.Timestamp `json:"failedAt"`
+	Error       *string          `json:"error"`
+	Filename    string           `json:"filename"`
+	ByteSize    int32            `json:"byteSize"`
+}
+
+func (q *Queries) ListMyPendingOrRecentImports(ctx context.Context, ownerID string) ([]ListMyPendingOrRecentImportsRow, error) {
+	rows, err := q.db.Query(ctx, listMyPendingOrRecentImports, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMyPendingOrRecentImportsRow{}
+	for rows.Next() {
+		var i ListMyPendingOrRecentImportsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.InsertedAt,
+			&i.CompletedAt,
+			&i.FailedAt,
+			&i.Error,
+			&i.Filename,
+			&i.ByteSize,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTracksOrderByTime = `-- name: ListTracksOrderByTime :many
 SELECT id, owner_id, name, upload_time, time, geojson, import_id
 FROM tracks
 WHERE owner_id = $1
-ORDER BY time
+ORDER BY time DESC
 `
 
 func (q *Queries) ListTracksOrderByTime(ctx context.Context, ownerID *string) ([]Track, error) {
@@ -157,7 +273,8 @@ func (q *Queries) MarkTrackImportCompleted(ctx context.Context, id int64) error 
 
 const markTrackImportFailed = `-- name: MarkTrackImportFailed :exec
 UPDATE track_imports
-SET failed_at = NOW(), error = $2
+SET failed_at = NOW(),
+    error     = $2
 WHERE id = $1
 `
 

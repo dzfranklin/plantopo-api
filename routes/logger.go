@@ -8,7 +8,7 @@ import (
 
 func loggerMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		requestID := getRequestID(c)
+		requestID := RequestID(c)
 		start := time.Now()
 		path := c.Request.URL.Path
 		raw := c.Request.URL.RawQuery

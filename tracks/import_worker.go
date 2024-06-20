@@ -46,13 +46,13 @@ type ImportWorker struct {
 }
 
 func AddImportWorker(workers *river.Workers, db *pgxpool.Pool, toGeoJSON ToGeoJSON, analyzer Analyzer) {
-	river.AddWorker[ImportWorkerArgs](workers, &ImportWorker{db: db, toGeoJSON: toGeoJSON})
+	river.AddWorker[ImportWorkerArgs](workers, &ImportWorker{db: db, toGeoJSON: toGeoJSON, analyzer: analyzer})
 }
 
 func (w *ImportWorker) Work(ctx context.Context, job *river.Job[ImportWorkerArgs]) error {
 	importId := job.Args.Id
 	uploadTime := job.CreatedAt
-	l := slog.With(ctx, "job", job.ID, "import", importId, "created_at", job.CreatedAt)
+	l := slog.With("job", job.ID, "import", importId, "created_at", job.CreatedAt)
 
 	q := db.New(w.db)
 	data, err := q.GetTrackImport(ctx, importId)
@@ -89,6 +89,11 @@ func (w *ImportWorker) Work(ctx context.Context, job *river.Job[ImportWorkerArgs
 
 	var tracks []db.InsertImportedTrackParams
 	for i, rawFeature := range trackFeatures.Features {
+		if rawFeature.Geometry.GeoJSONType() != "LineString" {
+			l.Info("skipping non-line feature", "i", i, "type", rawFeature.Geometry.GeoJSONType())
+			continue
+		}
+
 		feature, err := w.analyzer.HydrateTrack(ctx, *rawFeature)
 		if err != nil {
 			l.Error("hydrate track", "i", i, "error", err)
@@ -147,9 +152,4 @@ func importTrackTime(track *geojson.Feature, fallback time.Time) time.Time {
 	} else {
 		return fallback
 	}
-}
-
-func isSaneImportTime(t time.Time) bool {
-	currentYear := time.Now().Year()
-	return t.Year() > currentYear-100 && t.Year() < currentYear+1
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/geo"
 	"github.com/paulmach/orb/geojson"
+	"math"
 )
 
 type Analyzer struct {
@@ -29,7 +30,7 @@ func (a *Analyzer) HydrateTrack(ctx context.Context, f geojson.Feature) (geojson
 	props := f.Properties
 	coordProps := props.CoordinateProperties()
 
-	length := geo.LengthHaversine(geom)
+	length := roundPlaces(geo.LengthHaversine(geom), 6)
 	props["lengthMeters"] = length
 
 	durationSecs, ok := TrackDuration(f)
@@ -44,4 +45,12 @@ func (a *Analyzer) HydrateTrack(ctx context.Context, f geojson.Feature) (geojson
 	coordProps["elevationMeters"] = elevations
 
 	return f, nil
+}
+
+func roundPlaces(f float64, places int) float64 {
+	scale := float64(1)
+	for i := 0; i < places; i++ {
+		scale *= 10
+	}
+	return math.Round(f*scale) / scale
 }
