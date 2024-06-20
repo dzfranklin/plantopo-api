@@ -92,3 +92,15 @@ INSERT INTO tracks
     (owner_id, name, upload_time, time, geojson, import_id)
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id;
+
+
+-- name: GetUnitSettings :one
+SELECT value
+FROM unit_settings
+WHERE user_id = $1;
+
+-- name: SetUnitSettings :exec
+INSERT INTO unit_settings (user_id, value)
+VALUES ($1, $2)
+ON CONFLICT (user_id) DO UPDATE
+SET value = $2;

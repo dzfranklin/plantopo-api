@@ -5,6 +5,8 @@
 package db
 
 import (
+	"encoding/json"
+
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/paulmach/orb/geojson"
 )
@@ -29,4 +31,9 @@ type TrackImport struct {
 	Error       *string          `json:"error"`
 	Filename    string           `json:"filename"`
 	Data        []byte           `json:"data"`
+}
+
+type UnitSetting struct {
+	UserID string          `json:"userID"`
+	Value  json.RawMessage `json:"value"`
 }

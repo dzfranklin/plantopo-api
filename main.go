@@ -8,6 +8,7 @@ import (
 	"github.com/dzfranklin/plantopo-api/authn"
 	"github.com/dzfranklin/plantopo-api/db"
 	"github.com/dzfranklin/plantopo-api/routes"
+	"github.com/dzfranklin/plantopo-api/settings"
 	"github.com/dzfranklin/plantopo-api/tracks"
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
@@ -77,11 +78,13 @@ func main() {
 	}()
 
 	tracksRepo := tracks.NewRepo(pool, riverClient)
+	settingsRepo := settings.NewRepo(pool)
 
 	router := routes.Router(
 		authenticator,
 		tracksRepo,
 		elevationService,
+		settingsRepo,
 	)
 
 	go func() {

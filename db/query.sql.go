@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/paulmach/orb/geojson"
@@ -141,6 +142,19 @@ func (q *Queries) GetTrackOwner(ctx context.Context, id int64) (*string, error) 
 	var owner_id *string
 	err := row.Scan(&owner_id)
 	return owner_id, err
+}
+
+const getUnitSettings = `-- name: GetUnitSettings :one
+SELECT value
+FROM unit_settings
+WHERE user_id = $1
+`
+
+func (q *Queries) GetUnitSettings(ctx context.Context, userID string) (json.RawMessage, error) {
+	row := q.db.QueryRow(ctx, getUnitSettings, userID)
+	var value json.RawMessage
+	err := row.Scan(&value)
+	return value, err
 }
 
 const hasImportedTrack = `-- name: HasImportedTrack :one
@@ -339,5 +353,22 @@ type MarkTrackImportFailedParams struct {
 
 func (q *Queries) MarkTrackImportFailed(ctx context.Context, arg MarkTrackImportFailedParams) error {
 	_, err := q.db.Exec(ctx, markTrackImportFailed, arg.ID, arg.Error)
+	return err
+}
+
+const setUnitSettings = `-- name: SetUnitSettings :exec
+INSERT INTO unit_settings (user_id, value)
+VALUES ($1, $2)
+ON CONFLICT (user_id) DO UPDATE
+SET value = $2
+`
+
+type SetUnitSettingsParams struct {
+	UserID string          `json:"userID"`
+	Value  json.RawMessage `json:"value"`
+}
+
+func (q *Queries) SetUnitSettings(ctx context.Context, arg SetUnitSettingsParams) error {
+	_, err := q.db.Exec(ctx, setUnitSettings, arg.UserID, arg.Value)
 	return err
 }
