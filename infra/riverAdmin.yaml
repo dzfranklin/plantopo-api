@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: river-admin
+  namespace: pt
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: river-admin
+  template:
+    metadata:
+      labels:
+        app: river-admin
+    spec:
+      containers:
+        - name: riverui
+          image: ghcr.io/riverqueue/riverui:0.0.1
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            - name: PORT
+              value: "80"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: api
+                  key: database_url
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: river-admin
+  namespace: pt
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      name: http
+      targetPort: http
+  selector:
+    app: river-admin

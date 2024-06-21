@@ -10,6 +10,7 @@ import (
 	"github.com/dzfranklin/plantopo-api/routes"
 	"github.com/dzfranklin/plantopo-api/settings"
 	"github.com/dzfranklin/plantopo-api/tracks"
+	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
 	"github.com/riverqueue/river"
@@ -18,17 +19,46 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime"
+	"strings"
 	"syscall"
 	"time"
 )
 
+var buildDir string
+
 func main() {
+	_, mainFile, _, ok := runtime.Caller(0)
+	if ok {
+		buildDir = strings.TrimSuffix(mainFile, "main.go")
+	}
+
 	err := godotenv.Load(".env", ".env.local")
 	if err != nil {
 		slog.Info("dotenv", "error", err)
 	}
 
 	appEnv := getEnvOr("APP_ENV", "production")
+
+	var logHandler slog.Handler
+	if appEnv == "development" {
+		logHandler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+			Level:       slog.LevelDebug,
+			AddSource:   true,
+			ReplaceAttr: replaceAttr,
+		})
+	} else {
+		logHandler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level:       slog.LevelInfo,
+			AddSource:   true,
+			ReplaceAttr: replaceAttr,
+		})
+	}
+	slog.SetDefault(slog.New(logHandler))
+
+	if appEnv != "development" {
+		gin.SetMode(gin.ReleaseMode)
+	}
 
 	host := getEnvOr("HOST", "0.0.0.0")
 	port := getEnvOr("PORT", "8000")
@@ -38,6 +68,16 @@ func main() {
 	pool, err := db.NewPool(dbURL)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	// TODO: Configure for traefik
+	// See eg <https://stackoverflow.com/questions/44190607/how-do-you-find-the-cluster-service-cidr-of-a-kubernetes-cluster>
+	var trustedProxies []string
+	for _, proxy := range strings.Split(getEnvOr("TRUSTED_PROXIES", ""), ",") {
+		proxy = strings.TrimSpace(proxy)
+		if proxy != "" {
+			trustedProxies = append(trustedProxies, proxy)
+		}
 	}
 
 	var authenticator routes.Authenticator
@@ -86,6 +126,11 @@ func main() {
 		elevationService,
 		settingsRepo,
 	)
+
+	err = router.SetTrustedProxies(trustedProxies)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	go func() {
 		log.Println("Server running on", addr)
@@ -155,4 +200,14 @@ func mustGetEnv(key string) string {
 		log.Fatalf("missing env var %s", key)
 	}
 	return value
+}
+
+func replaceAttr(_ []string, a slog.Attr) slog.Attr {
+	if a.Key == "source" {
+		if v, ok := a.Value.Any().(*slog.Source); ok {
+			v.File = strings.Replace(v.File, buildDir, "", 1)
+			return slog.Any(a.Key, v)
+		}
+	}
+	return a
 }

@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: pt
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+      annotations:
+        k8s.grafana.com/scrape: "true"
+        k8s.grafana.com/metrics.portName: "http"
+        k8s.grafana.com/job: "api"
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/dzfranklin/plantopo-api:latest
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: PORT
+              value: "8000"
+            - name: APP_ENV
+              value: "production"
+            - name: ELEVATION_DATASET
+              value: "/data/cop90/index.vrt"
+            - name: ELEVATION_SERVICE
+              value: http://elevation.pt.svc.cluster.local
+            - name: TO_GEOJSON_SERVICE
+              value: http://togeojson.pt.svc.cluster.local
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: api
+                  key: database_url
+            - name: WORKOS_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: workos
+                  key: client_id
+            - name: WORKOS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: workos
+                  key: api_key
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http

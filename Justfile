@@ -20,11 +20,12 @@ migrate *args:
   just gen
 
 migrate-prod *args:
-  echo "Migrating $PROD_DATABASE_URL"
-  migrate -path ./db/migrations -database $PROD_DATABASE_URL {{args}}
+  echo "Migrating $PROD_ADMIN_DATABASE_URL"
+  migrate -path ./db/migrations -database $PROD_ADMIN_DATABASE_URL {{args}}
 
 migrate-river:
   river migrate-up --database-url $DATABASE_URL
 
 migrate-prod-river:
-  river migrate-up --database-url $PROD_DATABASE_URL
+  echo "Migrating $PROD_ADMIN_DATABASE_URL"
+  river migrate-up --database-url $PROD_ADMIN_DATABASE_URL

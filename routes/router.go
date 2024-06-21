@@ -18,6 +18,8 @@ func Router(
 	r.Use(gin.Recovery())
 	r.Use(Auth(authenticator))
 
+	registerHealthRoute(r)
+
 	base := r.Group("/api/v1")
 
 	registerTracksRoutes(base, tracks)

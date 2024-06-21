@@ -1,0 +1,15 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: river-admin-ingress
+  namespace: pt
+spec:
+  defaultBackend:
+    service:
+      name: river-admin
+      port:
+        name: http
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - plantopo-river-admin
