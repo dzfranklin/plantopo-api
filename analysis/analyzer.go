@@ -14,7 +14,7 @@ type Analyzer struct {
 }
 
 type ElevationQuerier interface {
-	QueryElevations(ctx context.Context, points orb.LineString) ([]int32, error)
+	QueryElevations(ctx context.Context, points orb.LineString) ([]float64, error)
 }
 
 func NewAnalyzer(elevation ElevationQuerier) *Analyzer {

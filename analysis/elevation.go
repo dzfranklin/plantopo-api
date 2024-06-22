@@ -31,8 +31,8 @@ func NewElevationService(endpoint string) *ElevationService {
 // QueryElevations queries the elevation service for the given points.
 //
 // The input points are a list of [longitude, latitude] pairs.
-func (s *ElevationService) QueryElevations(ctx context.Context, points orb.LineString) ([]int32, error) {
-	var elevations []int32
+func (s *ElevationService) QueryElevations(ctx context.Context, points orb.LineString) ([]float64, error) {
+	var elevations []float64
 	err := backoff.Retry(func() error {
 		var err error
 		elevations, err = doElevationLookup(ctx, s.http, s.endpoint+"/elevation", points)
@@ -46,10 +46,10 @@ func (s *ElevationService) QueryElevations(ctx context.Context, points orb.LineS
 	return elevations, err
 }
 
-func doElevationLookup(ctx context.Context, client *http.Client, url string, points orb.LineString) ([]int32, error) {
+func doElevationLookup(ctx context.Context, client *http.Client, url string, line orb.LineString) ([]float64, error) {
 	reqData := struct {
-		Points orb.LineString `json:"points"`
-	}{points}
+		Coordinates orb.LineString `json:"coordinates"`
+	}{line}
 	reqBody, err := json.Marshal(reqData)
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ func doElevationLookup(ctx context.Context, client *http.Client, url string, poi
 		return nil, fmt.Errorf("%s: %s", resp.Status, string(body))
 	}
 	var result struct {
-		Elevations []int32 `json:"elevations"`
+		Elevations []float64 `json:"elevations"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
