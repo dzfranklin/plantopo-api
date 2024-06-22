@@ -29,3 +29,6 @@ migrate-river:
 migrate-prod-river:
   echo "Migrating $PROD_ADMIN_DATABASE_URL"
   river migrate-up --database-url $PROD_ADMIN_DATABASE_URL
+
+pre-commit:
+  just test
