@@ -19,6 +19,7 @@ func Router(
 	r.Use(Auth(authenticator))
 
 	registerHealthRoute(r)
+	registerMetaRoutes(r)
 
 	base := r.Group("/api/v1")
 

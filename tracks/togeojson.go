@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dzfranklin/plantopo-api/meta"
 	"io"
 	"net/http"
 	"net/url"
@@ -50,6 +51,7 @@ func (c *ToGeoJSONService) Convert(ctx context.Context, filename string, data []
 		URL:    u,
 		Body:   io.NopCloser(bytes.NewReader(data)),
 	}
+	meta.SetUserAgent(req)
 	resp, err := c.client.Do(req.WithContext(ctx))
 	if err != nil {
 		return nil, err

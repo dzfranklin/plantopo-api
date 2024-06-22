@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/cenkalti/backoff/v4"
+	"github.com/dzfranklin/plantopo-api/meta"
 	"github.com/paulmach/orb"
 	"io"
 	"log/slog"
@@ -57,6 +58,7 @@ func doElevationLookup(ctx context.Context, client *http.Client, url string, poi
 	if err != nil {
 		return nil, err
 	}
+	meta.SetUserAgent(req)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
